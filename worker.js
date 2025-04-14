@@ -34,7 +34,7 @@ onmessage = function (event) {
     meshMap = RemoveLowTriangles(meshMap);
 
     postMessage({
-        "meshMap": meshMap,
+        "topMeshMap": meshMap,
         "coordX": coordX,
         "coordY": coordY
     });

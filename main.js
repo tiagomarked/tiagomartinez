@@ -15,49 +15,12 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const generatingChunks = [];
 
-const worker = new Worker(new URL('./worker.js', import.meta.url), {
-    type: 'module'
-});
 
-worker.onmessage = function (event) {
-    const coordX = event.data["coordX"];
-    const coordY = event.data["coordY"];
-    const meshMap = event.data["meshMap"];
-
-    const vertices = meshMap.get("vertices");
-    const indices = meshMap.get("indices");
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-
-    const material = new THREE.MeshBasicMaterial({
-        color: 0x00ff00,
-        wireframe: true
-    });
-
-    const chunk = new THREE.Mesh(geometry, material);
-    chunk.position.x = coordX * (CHUNK_SIZE - 1);
-    chunk.position.y = coordY * (CHUNK_SIZE - 1);
-    scene.add(chunk);
-
-    const key = `${coordX},${coordY}`;
-    chunksInScene.set(key, chunk);
-
-    const index = generatingChunks.indexOf(key);
-    if (index !== -1)
-        generatingChunks.splice(index, 1);
-};
-
-function CreateChunk(coordX, coordY) {
-    const key = `${coordX},${coordY}`;
-    generatingChunks.push(key);
-    worker.postMessage({
-        "coordX": coordX,
-        "coordY": coordY,
-        "seed": SEED
-    });
+window.addEventListener('resize', OnWindowResize, false);
+function OnWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function UpdateChunks() {
@@ -91,6 +54,49 @@ function UpdateChunks() {
     });
 }
 
+function CreateChunk(coordX, coordY) {
+    const key = `${coordX},${coordY}`;
+    generatingChunks.push(key);
+    worker.postMessage({
+        "coordX": coordX,
+        "coordY": coordY,
+        "seed": SEED
+    });
+}
+
+const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+worker.onmessage = function (event) {
+    const coordX = event.data["coordX"];
+    const coordY = event.data["coordY"];
+    const topMeshMap = event.data["topMeshMap"];
+
+    const vertices = topMeshMap.get("vertices");
+    const indices = topMeshMap.get("indices");
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    const material = new THREE.MeshBasicMaterial({
+        color: 0x00ff00,
+        wireframe: true
+    });
+
+    const chunk = new THREE.Mesh(geometry, material);
+    chunk.position.x = coordX * (CHUNK_SIZE - 1);
+    chunk.position.y = coordY * (CHUNK_SIZE - 1);
+    scene.add(chunk);
+
+    const key = `${coordX},${coordY}`;
+    chunksInScene.set(key, chunk);
+
+    const index = generatingChunks.indexOf(key);
+    if (index !== -1)
+        generatingChunks.splice(index, 1);
+};
+
+
 camera.position.y = -80;
 camera.position.z = 40;
 camera.rotation.x = 1;
@@ -98,6 +104,6 @@ scene.fog = new THREE.Fog("#000000", MAX_VIEW_DISTANCE * .3, MAX_VIEW_DISTANCE *
 
 function animate() {
     UpdateChunks();
-    camera.position.y += .5;
+    camera.position.y += 1;
     renderer.render(scene, camera);
 }
