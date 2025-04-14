@@ -2,7 +2,6 @@ import Prando from 'prando';
 import * as THREE from 'three';
 import { PerlinNoise } from './perlin.js';
 
-const SEED = 123;
 const Perlin = new PerlinNoise();
 
 const CHUNK_SIZE = 121;
@@ -23,12 +22,14 @@ const terrainCurve = new THREE.CubicBezierCurve(
 );
 
 onmessage = function (event) {
-    const coordX = event.data["coordY"];
-    const coordY = event.data["coordX"];
+    const coordX = event.data["coordX"];
+    const coordY = event.data["coordY"];
+    const seed = event.data["seed"];
+
     const posX = coordX * (CHUNK_SIZE - 1);
     const posY = coordY * (CHUNK_SIZE - 1);
 
-    const noiseMap = GenerateNoiseMap(posX, posY);
+    const noiseMap = GenerateNoiseMap(posX, posY, seed);
     let meshMap = GenerateMesh(noiseMap, 1);
     meshMap = RemoveLowTriangles(meshMap);
 
@@ -39,9 +40,9 @@ onmessage = function (event) {
     });
 };
 
-function GenerateNoiseMap(offsetX, offsetY) {
+function GenerateNoiseMap(offsetX, offsetY, seed) {
     const noiseMap = new Array(CHUNK_SIZE).fill(0).map(() => new Array(CHUNK_SIZE).fill(0));
-    const pnrg = new Prando(SEED);
+    const pnrg = new Prando(seed);
 
     const octaveOffsets = new Array(OCTAVES);
 

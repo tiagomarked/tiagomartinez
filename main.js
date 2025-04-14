@@ -6,18 +6,22 @@ renderer.setAnimationLoop(animate);
 document.body.appendChild(renderer.domElement);
 
 const CHUNK_SIZE = 121;
-const MAX_VIEW_DISTANCE = 500;
+const MAX_VIEW_DISTANCE = 600;
 const SEED = Math.random() * 1000.0;
 const CHUNKS_VISIBLE_IN_VIEW_DISTANCE = Math.round(MAX_VIEW_DISTANCE / CHUNK_SIZE);
 
 const chunksInScene = new Map();
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const generatingChunks = [];
 
-const worker = new Worker('worker.js', { type: 'module' });
+const worker = new Worker(new URL('./worker.js', import.meta.url), {
+    type: 'module'
+});
+
 worker.onmessage = function (event) {
-    const coordX = event.data["coordY"];
-    const coordY = event.data["coordX"];
+    const coordX = event.data["coordX"];
+    const coordY = event.data["coordY"];
     const meshMap = event.data["meshMap"];
 
     const vertices = meshMap.get("vertices");
@@ -40,12 +44,19 @@ worker.onmessage = function (event) {
 
     const key = `${coordX},${coordY}`;
     chunksInScene.set(key, chunk);
+
+    const index = generatingChunks.indexOf(key);
+    if (index !== -1)
+        generatingChunks.splice(index, 1);
 };
 
 function CreateChunk(coordX, coordY) {
+    const key = `${coordX},${coordY}`;
+    generatingChunks.push(key);
     worker.postMessage({
         "coordX": coordX,
-        "coordY": coordY
+        "coordY": coordY,
+        "seed": SEED
     });
 }
 
@@ -65,29 +76,28 @@ function UpdateChunks() {
             let removeIndex = toDestroy.indexOf(key);
             toDestroy.splice(removeIndex, 1);
 
-            if (!chunksInScene.has(key)) {
+            if (!chunksInScene.has(key) && generatingChunks.indexOf(key) == -1) {
                 CreateChunk(viewedChunkCoordX, viewedChunkCoordY);
             }
         }
     }
 
     toDestroy.forEach(key => {
-        let chunkToDestroy = chunksInScene.get(key);
-        scene.remove(chunkToDestroy);
-        chunksInScene.delete(key);
+        const removeIndex = toDestroy.indexOf(key);
+        if (removeIndex !== -1) {
+            toDestroy.splice(removeIndex, 1);
+            chunksInScene.delete(key);
+        }
     });
 }
-
 
 camera.position.y = -80;
 camera.position.z = 40;
 camera.rotation.x = 1;
 scene.fog = new THREE.Fog("#000000", MAX_VIEW_DISTANCE * .3, MAX_VIEW_DISTANCE * .7);
 
-setInterval(UpdateChunks, 500);
-
 function animate() {
-
+    UpdateChunks();
     camera.position.y += .5;
     renderer.render(scene, camera);
 }
