@@ -1,4 +1,4 @@
-require("dotenv").config({ "path": "deploy.env" });
+require("dotenv").config({ "path": "scripts/deploy.env" });
 
 const FtpDeploy = require("ftp-deploy");
 const ftpDeploy = new FtpDeploy();
@@ -8,7 +8,7 @@ const config = {
     password: process.env.FTP_PASSWORD,
     host: process.env.FTP_HOST,
     port: process.env.FTP_PORT,
-    localRoot: __dirname + "/dist",
+    localRoot: __dirname + "/../dist",
     remoteRoot: process.env.FTP_REMOTE_PATH,
     include: ["*", "**/*"],
     deleteRemote: true,
