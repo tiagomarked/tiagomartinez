@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GenerateMeshMaps } from './worker';
 
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -6,7 +7,7 @@ renderer.setAnimationLoop(animate);
 document.body.appendChild(renderer.domElement);
 
 const CHUNK_SIZE = 121;
-const MAX_VIEW_DISTANCE = 600;
+const MAX_VIEW_DISTANCE = 800;
 const SEED = Math.random() * 1000.0;
 const CHUNKS_VISIBLE_IN_VIEW_DISTANCE = Math.round(MAX_VIEW_DISTANCE / CHUNK_SIZE);
 
@@ -23,7 +24,7 @@ function OnWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function UpdateChunks() {
+function UpdateChunks(async = true) {
     let chunkSize = CHUNK_SIZE - 1;
     let currentChunkCoordX = Math.round(camera.position.x / chunkSize);
     let currentChunkCoordY = Math.round(camera.position.y / chunkSize);
@@ -40,7 +41,7 @@ function UpdateChunks() {
             toDestroy.splice(removeIndex, 1);
 
             if (!chunksInScene.has(key) && generatingChunks.indexOf(key) == -1) {
-                CreateChunk(viewedChunkCoordX, viewedChunkCoordY);
+                CreateChunk(viewedChunkCoordX, viewedChunkCoordY, async);
             }
         }
     }
@@ -54,28 +55,37 @@ function UpdateChunks() {
     });
 }
 
-function CreateChunk(coordX, coordY) {
+function CreateChunk(coordX, coordY, async = true) {
     const key = `${coordX},${coordY}`;
     generatingChunks.push(key);
-    worker.postMessage({
-        "coordX": coordX,
-        "coordY": coordY,
-        "seed": SEED
-    });
+    if (async) {
+        worker.postMessage({
+            "coordX": coordX,
+            "coordY": coordY,
+            "seed": SEED
+        });
+    }
+    else {
+        const data = GenerateMeshMaps(coordX, coordY, SEED);
+        ApplyChunkData(data);
+    }
 }
 
 const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
 worker.onmessage = function (event) {
-    const coordX = event.data["coordX"];
-    const coordY = event.data["coordY"];
+    ApplyChunkData(event.data);
+};
 
-    const topMeshMap = event.data["topMeshMap"];
-    const botMeshMap = event.data["botMeshMap"];
+function ApplyChunkData(data) {
+    const coordX = data.get("coordX");
+    const coordY = data.get("coordY");
+    const topMeshMap = data.get("topMeshMap");
+    const botMeshMap = data.get("botMeshMap");
 
     const chunkX = coordX * (CHUNK_SIZE - 1);
     const chunkY = coordY * (CHUNK_SIZE - 1);
-    const topChunk = AddChunk(topMeshMap, chunkX, chunkY, 0x00ff00);
     const botChunk = AddChunk(botMeshMap, chunkX, chunkY, "orange");
+    const topChunk = AddChunk(topMeshMap, chunkX, chunkY, 0x00ff00);
 
     const key = `${coordX},${coordY}`;
     chunksInScene.set(key, topChunk);
@@ -83,7 +93,7 @@ worker.onmessage = function (event) {
     const index = generatingChunks.indexOf(key);
     if (index !== -1)
         generatingChunks.splice(index, 1);
-};
+}
 
 function AddChunk(meshMap, x, y, color) {
     const vertices = meshMap.get("vertices");
@@ -113,6 +123,7 @@ camera.position.z = 40;
 camera.rotation.x = 1;
 scene.fog = new THREE.Fog("#000000", MAX_VIEW_DISTANCE * .3, MAX_VIEW_DISTANCE * .7);
 
+UpdateChunks(false);
 function animate() {
     UpdateChunks();
     camera.position.y += 1;

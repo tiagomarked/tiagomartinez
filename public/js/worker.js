@@ -12,7 +12,7 @@ const NOISE_MULTIPLIER = 75;
 
 const PERSISTENCE = 0.7;
 const LACUNARITY = 1.7;
-const CUTOFF = .4;
+const CUTOFF = .6;
 
 const terrainCurve = new THREE.CubicBezierCurve(
     new THREE.Vector2(0, 0),
@@ -25,22 +25,27 @@ onmessage = function (event) {
     const coordX = event.data["coordX"];
     const coordY = event.data["coordY"];
     const seed = event.data["seed"];
+    const data = GenerateMeshMaps(coordX, coordY, seed);
+    postMessage(data);
+};
 
+export function GenerateMeshMaps(coordX, coordY, seed) {
     const posX = coordX * (CHUNK_SIZE - 1);
     const posY = coordY * (CHUNK_SIZE - 1);
 
     const noiseMap = GenerateNoiseMap(posX, posY, seed);
     let topMeshMap = GenerateMesh(noiseMap, 1);
     topMeshMap = RemoveLowTriangles(topMeshMap);
-    let botMeshMap = GenerateUnderMesh(new Map(topMeshMap));
-
-    postMessage({
-        "topMeshMap": topMeshMap,
-        "botMeshMap": botMeshMap,
-        "coordX": coordX,
-        "coordY": coordY
-    });
-};
+    topMeshMap = RemoveDisconnectedTriangles(topMeshMap, 20);
+    const botMeshMap = GenerateUnderMesh(new Map(topMeshMap));
+    return new Map([
+        ["topMeshMap", topMeshMap],
+        ["botMeshMap", botMeshMap],
+        ["coordX", coordX],
+        ["coordY", coordY]
+    ]
+    );
+}
 
 function GenerateNoiseMap(offsetX, offsetY, seed) {
     const noiseMap = new Array(CHUNK_SIZE).fill(0).map(() => new Array(CHUNK_SIZE).fill(0));
@@ -134,7 +139,7 @@ function GenerateMesh(noiseMap, LOD = 1) {
 
     return new Map([
         ["vertices", vertices],
-        ["indices", indices]
+        ["indices", indices],
     ])
 }
 
@@ -185,6 +190,117 @@ function RemoveLowTriangles(meshMap) {
         ["triangleCount", triangleCount],
     ])
 }
+
+function RemoveDisconnectedTriangles(meshMap, minTrianglesPerIsland = 2) {
+    const vertices = meshMap.get("vertices");
+    const indices = meshMap.get("indices");
+    const triangleCount = indices.length / 3;
+
+    const edgeMap = new Map(); // "v1,v2" → [triangle indices]
+
+    function getEdgeKey(a, b) {
+        return a < b ? `${a},${b}` : `${b},${a}`;
+    }
+
+    for (let i = 0; i < triangleCount; i++) {
+        const v = [
+            indices[i * 3],
+            indices[i * 3 + 1],
+            indices[i * 3 + 2],
+        ];
+
+        const edges = [
+            getEdgeKey(v[0], v[1]),
+            getEdgeKey(v[1], v[2]),
+            getEdgeKey(v[2], v[0]),
+        ];
+
+        for (const edge of edges) {
+            if (!edgeMap.has(edge)) edgeMap.set(edge, []);
+            edgeMap.get(edge).push(i);
+        }
+    }
+
+    const triNeighbors = new Map(); // triangle index → set of neighbor indices
+
+    for (let [_, tris] of edgeMap.entries()) {
+        if (tris.length < 2) continue;
+        for (let i = 0; i < tris.length; i++) {
+            for (let j = i + 1; j < tris.length; j++) {
+                const a = tris[i];
+                const b = tris[j];
+                if (!triNeighbors.has(a)) triNeighbors.set(a, new Set());
+                if (!triNeighbors.has(b)) triNeighbors.set(b, new Set());
+                triNeighbors.get(a).add(b);
+                triNeighbors.get(b).add(a);
+            }
+        }
+    }
+
+    const visited = new Set();
+    const components = [];
+
+    for (let i = 0; i < triangleCount; i++) {
+        if (visited.has(i)) continue;
+
+        const stack = [i];
+        const component = [];
+
+        while (stack.length > 0) {
+            const tri = stack.pop();
+            if (visited.has(tri)) continue;
+
+            visited.add(tri);
+            component.push(tri);
+
+            const neighbors = triNeighbors.get(tri) || [];
+            for (const n of neighbors) {
+                if (!visited.has(n)) stack.push(n);
+            }
+        }
+
+        if (component.length >= minTrianglesPerIsland) {
+            components.push(component);
+        }
+    }
+
+    const newVertices = [];
+    const newIndices = [];
+    const indexMap = new Map();
+    let newIndexCounter = 0;
+
+    for (const component of components) {
+        for (const tri of component) {
+            const triVerts = [];
+            for (let j = 0; j < 3; j++) {
+                const oldIndex = indices[tri * 3 + j];
+                if (!indexMap.has(oldIndex)) {
+                    const x = vertices[oldIndex * 3];
+                    const y = vertices[oldIndex * 3 + 1];
+                    const z = vertices[oldIndex * 3 + 2];
+
+                    newVertices.push(x, y, z);
+                    indexMap.set(oldIndex, newIndexCounter++);
+                }
+                triVerts.push(indexMap.get(oldIndex));
+            }
+            newIndices.push(...triVerts);
+        }
+    }
+
+    const newTriangleCount = new Map();
+    for (let i = 0; i < newIndices.length; i++) {
+        const v = newIndices[i];
+        newTriangleCount.set(v, (newTriangleCount.get(v) || 0) + 1);
+    }
+
+    return new Map([
+        ["vertices", newVertices],
+        ["indices", newIndices],
+        ["triangleCount", newTriangleCount],
+    ])
+}
+
 
 function GenerateUnderMesh(meshMap) {
     const vertices = Array.from(meshMap.get("vertices"));
