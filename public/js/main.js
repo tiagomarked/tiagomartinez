@@ -68,10 +68,26 @@ const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'modu
 worker.onmessage = function (event) {
     const coordX = event.data["coordX"];
     const coordY = event.data["coordY"];
-    const topMeshMap = event.data["topMeshMap"];
 
-    const vertices = topMeshMap.get("vertices");
-    const indices = topMeshMap.get("indices");
+    const topMeshMap = event.data["topMeshMap"];
+    const botMeshMap = event.data["botMeshMap"];
+
+    const chunkX = coordX * (CHUNK_SIZE - 1);
+    const chunkY = coordY * (CHUNK_SIZE - 1);
+    const topChunk = AddChunk(topMeshMap, chunkX, chunkY, 0x00ff00);
+    const botChunk = AddChunk(botMeshMap, chunkX, chunkY, "orange");
+
+    const key = `${coordX},${coordY}`;
+    chunksInScene.set(key, topChunk);
+
+    const index = generatingChunks.indexOf(key);
+    if (index !== -1)
+        generatingChunks.splice(index, 1);
+};
+
+function AddChunk(meshMap, x, y, color) {
+    const vertices = meshMap.get("vertices");
+    const indices = meshMap.get("indices");
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
@@ -79,22 +95,17 @@ worker.onmessage = function (event) {
     geometry.computeVertexNormals();
 
     const material = new THREE.MeshBasicMaterial({
-        color: 0x00ff00,
-        wireframe: true
+        color: color,
+        //wireframe: true,
     });
 
     const chunk = new THREE.Mesh(geometry, material);
-    chunk.position.x = coordX * (CHUNK_SIZE - 1);
-    chunk.position.y = coordY * (CHUNK_SIZE - 1);
+    chunk.position.x = x;
+    chunk.position.y = y;
     scene.add(chunk);
 
-    const key = `${coordX},${coordY}`;
-    chunksInScene.set(key, chunk);
-
-    const index = generatingChunks.indexOf(key);
-    if (index !== -1)
-        generatingChunks.splice(index, 1);
-};
+    return chunk;
+}
 
 
 camera.position.y = -80;

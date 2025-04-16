@@ -30,11 +30,13 @@ onmessage = function (event) {
     const posY = coordY * (CHUNK_SIZE - 1);
 
     const noiseMap = GenerateNoiseMap(posX, posY, seed);
-    let meshMap = GenerateMesh(noiseMap, 1);
-    meshMap = RemoveLowTriangles(meshMap);
+    let topMeshMap = GenerateMesh(noiseMap, 1);
+    topMeshMap = RemoveLowTriangles(topMeshMap);
+    let botMeshMap = GenerateUnderMesh(new Map(topMeshMap));
 
     postMessage({
-        "topMeshMap": meshMap,
+        "topMeshMap": topMeshMap,
+        "botMeshMap": botMeshMap,
         "coordX": coordX,
         "coordY": coordY
     });
@@ -132,7 +134,7 @@ function GenerateMesh(noiseMap, LOD = 1) {
 
     return new Map([
         ["vertices", vertices],
-        ["indices", indices],
+        ["indices", indices]
     ])
 }
 
@@ -143,6 +145,7 @@ function RemoveLowTriangles(meshMap) {
     const newVertices = [];
     const newIndices = [];
     const indexMap = new Map();
+    const triangleCount = new Map();
 
     let newIndex = 0;
     for (let i = 0; i < indices.length; i += 3) {
@@ -166,12 +169,38 @@ function RemoveLowTriangles(meshMap) {
                 }
             }
 
-            newIndices.push(indexMap.get(v1), indexMap.get(v2), indexMap.get(v3));
+            const nv1 = indexMap.get(v1);
+            const nv2 = indexMap.get(v2);
+            const nv3 = indexMap.get(v3);
+            newIndices.push(nv1, nv2, nv3);
+            for (let v of [nv1, nv2, nv3]) {
+                triangleCount.set(v, (triangleCount.get(v) || 0) + 1);
+            }
         }
     }
 
     return new Map([
         ["vertices", newVertices],
         ["indices", newIndices],
+        ["triangleCount", triangleCount],
+    ])
+}
+
+function GenerateUnderMesh(meshMap) {
+    const vertices = Array.from(meshMap.get("vertices"));
+    const indices = meshMap.get("indices");
+    const triangleCount = meshMap.get("triangleCount");
+
+    for (let [v, count] of triangleCount.entries()) {
+        if (count < 6)
+            continue;
+        const zIndex = v * 3 + 2;
+        vertices[zIndex] = -vertices[zIndex] * 3.0;
+    }
+
+    return new Map([
+        ["vertices", vertices],
+        ["indices", indices],
+        ["triangleCount", triangleCount],
     ])
 }
