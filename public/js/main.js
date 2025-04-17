@@ -62,11 +62,12 @@ function CreateChunk(coordX, coordY, async = true) {
         worker.postMessage({
             "coordX": coordX,
             "coordY": coordY,
-            "seed": SEED
+            "seed": SEED,
+            "chunkSize": CHUNK_SIZE,
         });
     }
     else {
-        const data = GenerateMeshMaps(coordX, coordY, SEED);
+        const data = GenerateMeshMaps(coordX, coordY, SEED, CHUNK_SIZE);
         ApplyChunkData(data);
     }
 }
@@ -126,6 +127,6 @@ scene.fog = new THREE.Fog("#000000", MAX_VIEW_DISTANCE * .3, MAX_VIEW_DISTANCE *
 UpdateChunks(false);
 function animate() {
     UpdateChunks();
-    camera.position.y += 1;
+    camera.position.y += 2.5;
     renderer.render(scene, camera);
 }
