@@ -5,7 +5,7 @@ import { PerlinNoise } from './perlin.js';
 const Perlin = new PerlinNoise();
 
 const OCTAVES = 12;
-const NOISE_SCALE = 100;
+const NOISE_SCALE = 200;
 const NOISE_MULTIPLIER = 75;
 
 const PERSISTENCE = 0.7;
@@ -303,7 +303,7 @@ function RemoveDisconnectedTriangles(meshMap, minTrianglesPerIsland = 2) {
 
 function GenerateUnderMesh(meshMap) {
     const vertices = Array.from(meshMap.get("vertices"));
-    const indices = meshMap.get("indices");
+    const indices = Array.from(meshMap.get("indices"));
     const triangleCount = meshMap.get("triangleCount");
 
     for (let [v, count] of triangleCount.entries()) {
@@ -311,6 +311,13 @@ function GenerateUnderMesh(meshMap) {
             continue;
         const zIndex = v * 3 + 2;
         vertices[zIndex] = -vertices[zIndex] * 3.0;
+    }
+    
+    // flip normals
+    for (let i = 0, il = indices.length / 3; i < il; i++) {
+        let x = indices[i * 3]
+        indices[i * 3] = indices[i * 3 + 2]
+        indices[i * 3 + 2] = x
     }
 
     return new Map([
