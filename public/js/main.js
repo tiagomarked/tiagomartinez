@@ -135,7 +135,7 @@ scene.add(topLight);
 
 const botLight = new THREE.DirectionalLight(0xFFFFFF, 2);
 botLight.position.set(0, 0, -40);
-botLight.rotation.set(-1, 0, 0);
+botLight.rotation.set(0, 0, 0);
 scene.add(botLight);
 
 
