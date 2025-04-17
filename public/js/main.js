@@ -1,27 +1,30 @@
 import * as THREE from 'three';
 import { GenerateMeshMaps } from './worker';
 
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setAnimationLoop(animate);
+const canvas = document.querySelector('#c');
+const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
+renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+
+renderer.setAnimationLoop(Update);
 document.body.appendChild(renderer.domElement);
 
 const CHUNK_SIZE = 121;
-const MAX_VIEW_DISTANCE = 800;
+const MAX_VIEW_DISTANCE = 1200;
 const SEED = Math.random() * 1000.0;
 const CHUNKS_VISIBLE_IN_VIEW_DISTANCE = Math.round(MAX_VIEW_DISTANCE / CHUNK_SIZE);
 
 const chunksInScene = new Map();
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 800);
 const generatingChunks = [];
-
 
 window.addEventListener('resize', OnWindowResize, false);
 function OnWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(width, height, false);
 }
 
 function UpdateChunks(async = true) {
@@ -62,11 +65,12 @@ function CreateChunk(coordX, coordY, async = true) {
         worker.postMessage({
             "coordX": coordX,
             "coordY": coordY,
-            "seed": SEED
+            "seed": SEED,
+            "chunkSize": CHUNK_SIZE,
         });
     }
     else {
-        const data = GenerateMeshMaps(coordX, coordY, SEED);
+        const data = GenerateMeshMaps(coordX, coordY, SEED, CHUNK_SIZE);
         ApplyChunkData(data);
     }
 }
@@ -84,7 +88,7 @@ function ApplyChunkData(data) {
 
     const chunkX = coordX * (CHUNK_SIZE - 1);
     const chunkY = coordY * (CHUNK_SIZE - 1);
-    const botChunk = AddChunk(botMeshMap, chunkX, chunkY, "orange");
+    const botChunk = AddChunk(botMeshMap, chunkX, chunkY, "orange", true);
     const topChunk = AddChunk(topMeshMap, chunkX, chunkY, 0x00ff00);
 
     const key = `${coordX},${coordY}`;
@@ -95,7 +99,7 @@ function ApplyChunkData(data) {
         generatingChunks.splice(index, 1);
 }
 
-function AddChunk(meshMap, x, y, color) {
+function AddChunk(meshMap, x, y, color, flip = false) {
     const vertices = meshMap.get("vertices");
     const indices = meshMap.get("indices");
 
@@ -104,9 +108,9 @@ function AddChunk(meshMap, x, y, color) {
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
-    const material = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshPhongMaterial({
         color: color,
-        //wireframe: true,
+        shininess: 0,
     });
 
     const chunk = new THREE.Mesh(geometry, material);
@@ -117,15 +121,27 @@ function AddChunk(meshMap, x, y, color) {
     return chunk;
 }
 
-
-camera.position.y = -80;
-camera.position.z = 40;
+camera.position.set(0, 0, 40);
 camera.rotation.x = 1;
-scene.fog = new THREE.Fog("#000000", MAX_VIEW_DISTANCE * .3, MAX_VIEW_DISTANCE * .7);
+
+const backgroundColor = "#baffe0";
+scene.fog = new THREE.Fog(backgroundColor, MAX_VIEW_DISTANCE * .3, MAX_VIEW_DISTANCE * .7);
+scene.background = new THREE.Color(backgroundColor);
+
+const topLight = new THREE.DirectionalLight(0xFFFFFF, 3);
+topLight.position.set(0, 0, 40);
+topLight.rotation.set(1, 0, 0);
+scene.add(topLight);
+
+const botLight = new THREE.DirectionalLight(0xFFFFFF, 2);
+botLight.position.set(0, 0, -40);
+botLight.rotation.set(-1, 0, 0);
+scene.add(botLight);
+
 
 UpdateChunks(false);
-function animate() {
+function Update() {
     UpdateChunks();
-    camera.position.y += 1;
+    camera.position.y += 1
     renderer.render(scene, camera);
 }

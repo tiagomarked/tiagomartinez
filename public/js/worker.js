@@ -4,10 +4,8 @@ import { PerlinNoise } from './perlin.js';
 
 const Perlin = new PerlinNoise();
 
-const CHUNK_SIZE = 121;
 const OCTAVES = 12;
-
-const NOISE_SCALE = 100;
+const NOISE_SCALE = 200;
 const NOISE_MULTIPLIER = 75;
 
 const PERSISTENCE = 0.7;
@@ -25,16 +23,17 @@ onmessage = function (event) {
     const coordX = event.data["coordX"];
     const coordY = event.data["coordY"];
     const seed = event.data["seed"];
-    const data = GenerateMeshMaps(coordX, coordY, seed);
+    const chunkSize = event.data["chunkSize"];
+    const data = GenerateMeshMaps(coordX, coordY, seed, chunkSize);
     postMessage(data);
 };
 
-export function GenerateMeshMaps(coordX, coordY, seed) {
-    const posX = coordX * (CHUNK_SIZE - 1);
-    const posY = coordY * (CHUNK_SIZE - 1);
+export function GenerateMeshMaps(coordX, coordY, seed, chunkSize) {
+    const posX = coordX * (chunkSize - 1);
+    const posY = coordY * (chunkSize - 1);
 
-    const noiseMap = GenerateNoiseMap(posX, posY, seed);
-    let topMeshMap = GenerateMesh(noiseMap, 1);
+    const noiseMap = GenerateNoiseMap(posX, posY, seed, chunkSize);
+    let topMeshMap = GenerateMesh(noiseMap, chunkSize, 1);
     topMeshMap = RemoveLowTriangles(topMeshMap);
     topMeshMap = RemoveDisconnectedTriangles(topMeshMap, 20);
     const botMeshMap = GenerateUnderMesh(new Map(topMeshMap));
@@ -47,8 +46,8 @@ export function GenerateMeshMaps(coordX, coordY, seed) {
     );
 }
 
-function GenerateNoiseMap(offsetX, offsetY, seed) {
-    const noiseMap = new Array(CHUNK_SIZE).fill(0).map(() => new Array(CHUNK_SIZE).fill(0));
+function GenerateNoiseMap(offsetX, offsetY, seed, chunkSize) {
+    const noiseMap = new Array(chunkSize).fill(0).map(() => new Array(chunkSize).fill(0));
     const pnrg = new Prando(seed);
 
     const octaveOffsets = new Array(OCTAVES);
@@ -73,10 +72,10 @@ function GenerateNoiseMap(offsetX, offsetY, seed) {
     let maxLocalNoiseHeight = Number.MIN_VALUE;
     let minLocalNoiseHeight = Number.MAX_VALUE;
 
-    const halfSize = CHUNK_SIZE / 2;
+    const halfSize = chunkSize / 2;
 
-    for (let y = 0; y < CHUNK_SIZE; y++) {
-        for (let x = 0; x < CHUNK_SIZE; x++) {
+    for (let y = 0; y < chunkSize; y++) {
+        for (let x = 0; x < chunkSize; x++) {
             amplitude = 1;
             frequency = 1;
             let noiseHeight = 0;
@@ -100,8 +99,8 @@ function GenerateNoiseMap(offsetX, offsetY, seed) {
         }
     }
 
-    for (let y = 0; y < CHUNK_SIZE; y++) {
-        for (let x = 0; x < CHUNK_SIZE; x++) {
+    for (let y = 0; y < chunkSize; y++) {
+        for (let x = 0; x < chunkSize; x++) {
             let normalizedHeight = (noiseMap[x][y] + 1) / (maxPossibleHeight / 0.9);
             noiseMap[x][y] = Math.min(Math.max(normalizedHeight, 0), Number.MAX_SAFE_INTEGER);
         }
@@ -111,7 +110,7 @@ function GenerateNoiseMap(offsetX, offsetY, seed) {
 }
 
 
-function GenerateMesh(noiseMap, LOD = 1) {
+function GenerateMesh(noiseMap, chunkSize, LOD = 1) {
     const vertices = [];
     const indices = [];
 
@@ -128,7 +127,7 @@ function GenerateMesh(noiseMap, LOD = 1) {
             let z = noiseMap[x][y];
             vertices.push(topLeftX + x, topLeftY - y, z);
 
-            if (x < CHUNK_SIZE - 1 && y < CHUNK_SIZE - 1) {
+            if (x < chunkSize - 1 && y < chunkSize - 1) {
                 indices.push(vertexIndex, vertexIndex + verticesPerLine + 1, vertexIndex + verticesPerLine);
                 indices.push(vertexIndex + verticesPerLine + 1, vertexIndex, vertexIndex + 1);
             }
@@ -304,7 +303,7 @@ function RemoveDisconnectedTriangles(meshMap, minTrianglesPerIsland = 2) {
 
 function GenerateUnderMesh(meshMap) {
     const vertices = Array.from(meshMap.get("vertices"));
-    const indices = meshMap.get("indices");
+    const indices = Array.from(meshMap.get("indices"));
     const triangleCount = meshMap.get("triangleCount");
 
     for (let [v, count] of triangleCount.entries()) {
@@ -312,6 +311,13 @@ function GenerateUnderMesh(meshMap) {
             continue;
         const zIndex = v * 3 + 2;
         vertices[zIndex] = -vertices[zIndex] * 3.0;
+    }
+    
+    // flip normals
+    for (let i = 0, il = indices.length / 3; i < il; i++) {
+        let x = indices[i * 3]
+        indices[i * 3] = indices[i * 3 + 2]
+        indices[i * 3 + 2] = x
     }
 
     return new Map([
