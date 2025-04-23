@@ -190,7 +190,7 @@ export class ChunkData {
     }
 
 
-    RemoveDisconnectedTriangles(minTrianglesPerIsland = 2) {
+    RemoveDisconnectedTriangles(minTrianglesPerIsland = 32) {
         const triangleCount = this.indices.length / 3;
 
         const edgeMap = new Map(); // "v1,v2" → [triangle indices]
