@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GenerateMeshMaps } from './worker';
+import { ChunkData } from './worker';
 
 const canvas = document.querySelector('#c');
 const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
@@ -17,6 +17,38 @@ const chunksInScene = new Map();
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 800);
 const generatingChunks = [];
+
+class Chunk {
+    constructor(chunkData) {
+        this.data = chunkData;
+        this.botMesh = this.CreateMesh(this.data.underIndices, this.data.underVertices, "orange", true);
+        this.topMesh = this.CreateMesh(this.data.indices, this.data.vertices, 0x00ff00);
+    }
+
+    CreateMesh(indices, vertices, color, flip = false) {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+
+        const material = new THREE.MeshPhongMaterial({
+            color: color,
+            shininess: 0,
+        });
+
+        const chunk = new THREE.Mesh(geometry, material);
+        chunk.position.x = this.data.posX;
+        chunk.position.y = this.data.posY;
+        scene.add(chunk);
+
+        return chunk;
+    }
+
+    Destroy() {
+        scene.remove(this.botMesh);
+        scene.remove(this.topMesh);
+    }
+}
 
 window.addEventListener('resize', OnWindowResize, false);
 function OnWindowResize() {
@@ -52,6 +84,7 @@ function UpdateChunks(async = true) {
     toDestroy.forEach(key => {
         const removeIndex = toDestroy.indexOf(key);
         if (removeIndex !== -1) {
+            chunksInScene.get(key).Destroy();
             toDestroy.splice(removeIndex, 1);
             chunksInScene.delete(key);
         }
@@ -70,7 +103,7 @@ function CreateChunk(coordX, coordY, async = true) {
         });
     }
     else {
-        const data = GenerateMeshMaps(coordX, coordY, SEED, CHUNK_SIZE);
+        const data = new ChunkData(coordX, coordY, CHUNK_SIZE, SEED);
         ApplyChunkData(data);
     }
 }
@@ -80,45 +113,15 @@ worker.onmessage = function (event) {
     ApplyChunkData(event.data);
 };
 
-function ApplyChunkData(data) {
-    const coordX = data.get("coordX");
-    const coordY = data.get("coordY");
-    const topMeshMap = data.get("topMeshMap");
-    const botMeshMap = data.get("botMeshMap");
+function ApplyChunkData(chunkData) {
+    const chunk = new Chunk(chunkData);
 
-    const chunkX = coordX * (CHUNK_SIZE - 1);
-    const chunkY = coordY * (CHUNK_SIZE - 1);
-    const botChunk = AddChunk(botMeshMap, chunkX, chunkY, "orange", true);
-    const topChunk = AddChunk(topMeshMap, chunkX, chunkY, 0x00ff00);
-
-    const key = `${coordX},${coordY}`;
-    chunksInScene.set(key, topChunk);
+    const key = `${chunkData.coordX},${chunkData.coordY}`;
+    chunksInScene.set(key, chunk);
 
     const index = generatingChunks.indexOf(key);
     if (index !== -1)
         generatingChunks.splice(index, 1);
-}
-
-function AddChunk(meshMap, x, y, color, flip = false) {
-    const vertices = meshMap.get("vertices");
-    const indices = meshMap.get("indices");
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-
-    const material = new THREE.MeshPhongMaterial({
-        color: color,
-        shininess: 0,
-    });
-
-    const chunk = new THREE.Mesh(geometry, material);
-    chunk.position.x = x;
-    chunk.position.y = y;
-    scene.add(chunk);
-
-    return chunk;
 }
 
 camera.position.set(0, 0, 40);
@@ -142,6 +145,6 @@ scene.add(botLight);
 UpdateChunks(false);
 function Update() {
     UpdateChunks();
-    camera.position.y += 1
+    camera.position.y += 1;
     renderer.render(scene, camera);
 }
