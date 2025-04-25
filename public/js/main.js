@@ -9,7 +9,7 @@ renderer.setAnimationLoop(Update);
 document.body.appendChild(renderer.domElement);
 
 const CHUNK_SIZE = 121;
-const MAX_VIEW_DISTANCE = 500;
+const MAX_VIEW_DISTANCE = 1200;
 const SEED = Math.random() * 1000.0;
 const CHUNKS_VISIBLE_IN_VIEW_DISTANCE = Math.round(MAX_VIEW_DISTANCE / CHUNK_SIZE);
 
