@@ -1,5 +1,6 @@
 import Prando from 'prando';
-import * as THREE from 'three';
+import { CubicBezierCurve } from 'three/src/extras/curves/CubicBezierCurve.js';
+import { Vector2 } from 'three/src/math/Vector2.js';
 import { PerlinNoise } from './perlin.js';
 
 const Perlin = new PerlinNoise();
@@ -12,11 +13,11 @@ const PERSISTENCE = 0.7;
 const LACUNARITY = 1.7;
 const CUTOFF = .6;
 
-const terrainCurve = new THREE.CubicBezierCurve(
-    new THREE.Vector2(0, 0),
-    new THREE.Vector2(0.1, 0.01),
-    new THREE.Vector2(0.2, 0.01),
-    new THREE.Vector2(1, 1.5)
+const terrainCurve = new CubicBezierCurve(
+    new Vector2(0, 0),
+    new Vector2(0.1, 0.01),
+    new Vector2(0.2, 0.01),
+    new Vector2(1, 1.5)
 );
 
 onmessage = function (event) {
@@ -25,9 +26,9 @@ onmessage = function (event) {
     const coordY = event.data["coordY"];
     const seed = event.data["seed"];
     const chunkSize = event.data["chunkSize"];
-    
+
     const chunk = new ChunkData(coordX, coordY, chunkSize, seed);
-    
+
     postMessage(chunk);
 };
 

@@ -1,6 +1,17 @@
 import * as THREE from 'three';
 import { ChunkData } from './worker';
 
+const WORKERS = [];
+const NUM_WORKERS = 6;
+let currentWorker = 0;
+for (let i = 0; i < NUM_WORKERS; i++) {
+    const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+    worker.onmessage = function (event) {
+        ApplyChunkData(event.data);
+    };
+    WORKERS.push(worker);
+}
+
 const canvas = document.querySelector('#c');
 const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
 renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
@@ -59,17 +70,20 @@ function OnWindowResize() {
     renderer.setSize(width, height, false);
 }
 
-function UpdateChunks(async = true) {
+function UpdateChunks(async = true, yOffset = -1, xOffset = -1) {
     let chunkSize = CHUNK_SIZE - 1;
     let currentChunkCoordX = Math.round(camera.position.x / chunkSize);
     let currentChunkCoordY = Math.round(camera.position.y / chunkSize);
 
     let toDestroy = Array.from(chunksInScene.keys());
 
-    for (let yOffset = -CHUNKS_VISIBLE_IN_VIEW_DISTANCE; yOffset < CHUNKS_VISIBLE_IN_VIEW_DISTANCE; yOffset++) {
-        for (let xOffset = -CHUNKS_VISIBLE_IN_VIEW_DISTANCE; xOffset < CHUNKS_VISIBLE_IN_VIEW_DISTANCE; xOffset++) {
-            const viewedChunkCoordX = currentChunkCoordX + xOffset;
-            const viewedChunkCoordY = currentChunkCoordY + yOffset;
+    yOffset = yOffset == -1 ? CHUNKS_VISIBLE_IN_VIEW_DISTANCE : yOffset;
+    xOffset = xOffset == -1 ? CHUNKS_VISIBLE_IN_VIEW_DISTANCE : xOffset;
+
+    for (let y = -yOffset; y < yOffset; y++) {
+        for (let x = -xOffset; x < xOffset; x++) {
+            const viewedChunkCoordX = currentChunkCoordX + x;
+            const viewedChunkCoordY = currentChunkCoordY + y;
             const key = `${viewedChunkCoordX},${viewedChunkCoordY}`;
 
             let removeIndex = toDestroy.indexOf(key);
@@ -95,23 +109,27 @@ function CreateChunk(coordX, coordY, async = true) {
     const key = `${coordX},${coordY}`;
     generatingChunks.push(key);
     if (async) {
+
+        let workerIndex = currentWorker + 1;
+        if (workerIndex >= NUM_WORKERS)
+            workerIndex = 0;
+
+        const worker = WORKERS[workerIndex];
+        
         worker.postMessage({
             "coordX": coordX,
             "coordY": coordY,
             "seed": SEED,
             "chunkSize": CHUNK_SIZE,
         });
+
+        currentWorker = workerIndex;
     }
     else {
         const data = new ChunkData(coordX, coordY, CHUNK_SIZE, SEED);
         ApplyChunkData(data);
     }
 }
-
-const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
-worker.onmessage = function (event) {
-    ApplyChunkData(event.data);
-};
 
 function ApplyChunkData(chunkData) {
     const chunk = new Chunk(chunkData);
@@ -141,8 +159,6 @@ botLight.position.set(0, 0, -40);
 botLight.rotation.set(0, 0, 0);
 scene.add(botLight);
 
-
-UpdateChunks(false);
 function Update() {
     UpdateChunks();
     camera.position.y += 1;
