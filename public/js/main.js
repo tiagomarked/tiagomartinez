@@ -20,13 +20,13 @@ renderer.setAnimationLoop(Update);
 document.body.appendChild(renderer.domElement);
 
 const CHUNK_SIZE = 121;
-const MAX_VIEW_DISTANCE = 1200;
+const MAX_VIEW_DISTANCE = 1400;
 const SEED = Math.random() * 1000.0;
 const CHUNKS_VISIBLE_IN_VIEW_DISTANCE = Math.round(MAX_VIEW_DISTANCE / CHUNK_SIZE);
 
 const chunksInScene = new Map();
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 800);
+const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
 const generatingChunks = [];
 
 class Chunk {
@@ -115,7 +115,7 @@ function CreateChunk(coordX, coordY, async = true) {
             workerIndex = 0;
 
         const worker = WORKERS[workerIndex];
-        
+
         worker.postMessage({
             "coordX": coordX,
             "coordY": coordY,
